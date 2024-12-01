@@ -6,15 +6,19 @@ import randomstring = require("randomstring");
 import * as logger from "firebase-functions/logger";
 
 const oauth = {
+  provider: defineString("OAUTH_PROVIDER", {
+    default: "github",
+    description: "The OAuth provider.",
+  }),
+  git_hostname: defineString("OAUTH_GIT_HOSTNAME", {
+    default: "https://github.com",
+    description: "The hostname of the git provider.",
+  }),
   client_id: defineString("OAUTH_CLIENT_ID", {
     description: "The OAuth client ID.",
   }),
   // retrieved from Google Secrets Manager
   client_secret: defineSecret("OAUTH_CLIENT_SECRET"),
-  git_hostname: defineString("GIT_HOSTNAME", {
-    default: "https://github.com",
-    description: "The hostname of the git provider.",
-  }),
   token_path: defineString("OAUTH_TOKEN_PATH", {
     default: "/login/oauth/access_token",
     description: "The OAuth access token path.",
@@ -23,11 +27,10 @@ const oauth = {
     default: "/login/oauth/authorize",
     description: "The OAuth authorization path.",
   }),
-  provider: defineString("OAUTH_PROVIDER", {
-    default: "github",
-    description: "The OAuth provider.",
+  redirect_uri: defineString("OAUTH_REDIRECT_URI", {
+    description: "The OAuth redirect URI.",
   }),
-  scopes: defineString("SCOPES", {
+  scopes: defineString("OAUTH_SCOPES", {
     default: "repo,user",
     description: "The OAuth scopes to allow.",
   }),
@@ -55,29 +58,25 @@ function getScript(mess: string, content: any) {
 const oauthApp = express();
 
 oauthApp.get("/auth", (req, res) => {
-  try {
-    const oauth2 = new AuthorizationCode({
-      client: {
-        id: oauth.client_id.value(),
-        secret: oauth.client_secret.value(),
-      },
-      auth: {
-        tokenHost: oauth.git_hostname.value(),
-        tokenPath: oauth.token_path.value(),
-        authorizePath: oauth.authorize_path.value(),
-      },
-    });
+  const oauth2 = new AuthorizationCode({
+    client: {
+      id: oauth.client_id.value(),
+      secret: oauth.client_secret.value(),
+    },
+    auth: {
+      tokenHost: oauth.git_hostname.value(),
+      tokenPath: oauth.token_path.value(),
+      authorizePath: oauth.authorize_path.value(),
+    },
+  });
 
-    const authorizationUri = oauth2.authorizeURL({
-      scope: oauth.scopes.value(),
-      state: randomstring.generate(32),
-    });
+  const authorizationUri = oauth2.authorizeURL({
+    scope: oauth.scopes.value(),
+    state: randomstring.generate(32),
+    redirect_uri: `${oauth.redirect_uri.value()}/callback`,
+  });
 
-    return res.redirect(authorizationUri);
-  } catch (error) {
-    logger.error("Authorization Error", error);
-    return res.send(getScript("error", error));
-  }
+  return res.redirect(authorizationUri);
 });
 
 oauthApp.get("/callback", async (req, res) => {
@@ -96,6 +95,7 @@ oauthApp.get("/callback", async (req, res) => {
 
     const options: any = {
       code: req.query.code,
+      redirect_uri: `${oauth.redirect_uri.value()}/callback`,
     };
 
     if (oauth.provider.value() === "gitlab") {
