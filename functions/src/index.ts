@@ -124,7 +124,7 @@ oauthApp.get("/success", (req, res) => {
 
 oauthApp.get("/", (req, res) => {
   logger.log(oauth.client_id.value());
-  res.redirect(301, "/oauth/auth");
+  res.redirect(301, "/auth");
 });
 
 exports.oauth = onRequest({ secrets: ["OAUTH_CLIENT_SECRET"] }, oauthApp);
