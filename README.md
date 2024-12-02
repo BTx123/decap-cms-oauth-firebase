@@ -39,10 +39,13 @@ firebase use your-project-id
 ```
 
 Set the `OAUTH_CLIENT_SECRET` Firebase environment variable interactively using the value from the GitHub OAuth app:
+
 ```
 firebase functions:secrets:set OAUTH_CLIENT_SECRET
 # Should then prompt for secret
 ```
+
+> Note this will add or update a secret in [Google Secret Manager](https://cloud.google.com/security/products/secret-manager). The first 6 secret versions are free.
 
 ### 4. Deploy the function
 
@@ -56,16 +59,7 @@ Upon running deploy for the first time, you will need to interactively set your 
 
 For GitHub Enterprise and GitLab you will need to set the `OAUTH_GIT_HOSTNAME` environment variable.
 
-For GitLab you will also need to set the following additional environment variables as specified:
-
-```.env
-OAUTH_PROVIDER=gitlab
-OAUTH_GIT_HOSTNAME=https://gitlab.com
-OAUTH_AUTHORIZE_PATH=/oauth/authorize
-OAUTH_TOKEN_PATH=/oauth/token
-OAUTH_REDIRECT_URI=https://oauth-XXXXXXXXXX-XX.X.run.app
-OAUTH_SCOPES=api
-```
+For GitLab you will need to set `OAUTH_PROVIDER` to `gitlab`.
 
 You should update the **authorization callback URL** in your GitHub or GitLab OAuth app's settings to point to the URL of your Firebase function, which should be of the form: `https://oauth-XXXXXXXXXX-XX.X.run.app/callback`. If you get an invalid redirect URI error when authenticating with GitLab, make sure your redirect URI is present in the list of Callback URLs in the GitLab OAuth application.
 

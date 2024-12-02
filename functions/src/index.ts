@@ -4,117 +4,125 @@ import { AuthorizationCode } from "simple-oauth2";
 import express = require("express");
 import randomstring = require("randomstring");
 import * as logger from "firebase-functions/logger";
+import { config, Provider } from "./config";
 
-const oauth = {
-  provider: defineString("OAUTH_PROVIDER", {
-    default: "github",
-    description: "The OAuth provider.",
-  }),
-  git_hostname: defineString("OAUTH_GIT_HOSTNAME", {
-    default: "https://github.com",
-    description: "The hostname of the git provider.",
-  }),
-  client_id: defineString("OAUTH_CLIENT_ID", {
-    description: "The OAuth client ID.",
-  }),
-  // retrieved from Google Secrets Manager
-  client_secret: defineSecret("OAUTH_CLIENT_SECRET"),
-  token_path: defineString("OAUTH_TOKEN_PATH", {
-    default: "/login/oauth/access_token",
-    description: "The OAuth access token path.",
-  }),
-  authorize_path: defineString("OAUTH_AUTHORIZE_PATH", {
-    default: "/login/oauth/authorize",
-    description: "The OAuth authorization path.",
-  }),
-  redirect_uri: defineString("OAUTH_REDIRECT_URI", {
-    description: "The OAuth redirect URI.",
-  }),
-  scopes: defineString("OAUTH_SCOPES", {
-    default: "repo,user",
-    description: "The OAuth scopes to allow.",
-  }),
-};
+// Firebase parameterized configuration
 
-// eslint-disable-next-line require-jsdoc
-function getScript(mess: string, content: any) {
-  return `<!doctype html><html><body><script>
-    (function() {
-      function receiveMessage(e) {
-        console.log("receiveMessage %o", e)
+const OAUTH_PROVIDER = defineString("OAUTH_PROVIDER", {
+  default: "github",
+  description: "The OAuth provider to use.",
+  input: {
+    select: {
+      options: [
+        { label: "GitHub", value: "github" },
+        { label: "GitLab", value: "gitlab" },
+      ],
+    },
+  },
+});
+
+const OAUTH_GIT_HOSTNAME = defineString("OAUTH_GIT_HOSTNAME", {
+  default: undefined,
+  description: "The optional OAuth Git hostname to use " +
+    "(for GitHub Enterprise).",
+});
+
+const OAUTH_CLIENT_ID = defineString("OAUTH_GIT_CLIENT_ID", {
+  description: "The OAuth client ID.",
+});
+
+const OAUTH_CLIENT_SECRET = defineSecret("OAUTH_GIT_CLIENT_SECRET");
+
+const OAUTH_REDIRECT_URI = defineString("OAUTH_REDIRECT_URI", {
+  description: "The OAuth redirect base URI.",
+});
+
+/**
+ * Render callback body.
+ * @param {Provider} provider the provider type.
+ * @param {string} status the callback status.
+ * @param {unknown} content the content to display.
+ * @return {string} the callback body.
+ */
+function renderBody(
+  provider: Provider,
+  status: string,
+  content: unknown
+): string {
+  return `
+    <script>
+      const receiveMessage = (message) => {
         window.opener.postMessage(
-          'authorization:github:${mess}:${JSON.stringify(content)}',
-          e.origin
-        )
-        window.removeEventListener("message",receiveMessage,false);
+          'authorization:${provider}:${status}:${JSON.stringify(content)}',
+          message.origin
+        );
+
+        window.removeEventListener("message", receiveMessage, false);
       }
-      window.addEventListener("message", receiveMessage, false)
-      console.log("Sending message: %o", "github")
-      window.opener.postMessage("authorizing:github", "*")
-      })()
-    </script></body></html>`;
+      window.addEventListener("message", receiveMessage, false);
+
+      window.opener.postMessage("authorizing:${provider}", "*");
+    </script>
+  `;
 }
+
+// Main express app
 
 const oauthApp = express();
 
 oauthApp.get("/auth", (req, res) => {
+  const provider = OAUTH_PROVIDER.value() as Provider;
+  const configuration = config(
+    provider, OAUTH_CLIENT_ID.value(),
+    OAUTH_CLIENT_SECRET.value(),
+    OAUTH_GIT_HOSTNAME.value());
   const oauth2 = new AuthorizationCode({
-    client: {
-      id: oauth.client_id.value(),
-      secret: oauth.client_secret.value(),
-    },
-    auth: {
-      tokenHost: oauth.git_hostname.value(),
-      tokenPath: oauth.token_path.value(),
-      authorizePath: oauth.authorize_path.value(),
-    },
+    client: configuration.client,
+    auth: configuration.auth,
   });
 
   const authorizationUri = oauth2.authorizeURL({
-    scope: oauth.scopes.value(),
+    scope: configuration.scopes,
     state: randomstring.generate(32),
-    redirect_uri: `${oauth.redirect_uri.value()}/callback`,
+    redirect_uri: `${OAUTH_REDIRECT_URI.value()}/callback`,
   });
 
   return res.redirect(authorizationUri);
 });
 
 oauthApp.get("/callback", async (req, res) => {
-  try {
-    const oauth2 = new AuthorizationCode({
-      client: {
-        id: oauth.client_id.value(),
-        secret: oauth.client_secret.value(),
-      },
-      auth: {
-        tokenHost: oauth.git_hostname.value(),
-        tokenPath: oauth.token_path.value(),
-        authorizePath: oauth.authorize_path.value(),
-      },
-    });
+  const provider = OAUTH_PROVIDER.value() as Provider;
 
+  try {
+    const configuration = config(
+      provider, OAUTH_CLIENT_ID.value(),
+      OAUTH_CLIENT_SECRET.value(),
+      OAUTH_GIT_HOSTNAME.value());
+    const oauth2 = new AuthorizationCode({
+      client: configuration.client,
+      auth: configuration.auth,
+    });
     const options: any = {
       code: req.query.code,
-      redirect_uri: `${oauth.redirect_uri.value()}/callback`,
+      redirect_uri: `${OAUTH_REDIRECT_URI.value()}/callback`,
     };
 
-    if (oauth.provider.value() === "gitlab") {
-      options.client_id = oauth.client_id.value();
-      options.client_secret = oauth.client_secret.value();
+    if (provider === "gitlab") {
+      options.client_id = configuration.client.id;
+      options.client_secret = configuration.client.secret;
       options.grant_type = "authorization_code";
     }
 
     const token = await oauth2.getToken(options);
 
     return res.send(
-      getScript("success", {
+      renderBody(provider, "success", {
         token: token.token.access_token,
-        provider: oauth.provider.value(),
       })
     );
   } catch (error) {
     logger.error("Access Token Error", error);
-    return res.send(getScript("error", error));
+    return res.send(renderBody(provider, "error", error));
   }
 });
 
@@ -123,8 +131,7 @@ oauthApp.get("/success", (req, res) => {
 });
 
 oauthApp.get("/", (req, res) => {
-  logger.log(oauth.client_id.value());
   res.redirect(301, "/auth");
 });
 
-exports.oauth = onRequest({ secrets: ["OAUTH_CLIENT_SECRET"] }, oauthApp);
+exports.oauth = onRequest({ secrets: [OAUTH_CLIENT_SECRET.name] }, oauthApp);
