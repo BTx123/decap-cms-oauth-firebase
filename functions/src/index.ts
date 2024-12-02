@@ -27,11 +27,11 @@ const OAUTH_GIT_HOSTNAME = defineString("OAUTH_GIT_HOSTNAME", {
     "(for GitHub Enterprise).",
 });
 
-const OAUTH_CLIENT_ID = defineString("OAUTH_GIT_CLIENT_ID", {
+const OAUTH_CLIENT_ID = defineString("OAUTH_CLIENT_ID", {
   description: "The OAuth client ID.",
 });
 
-const OAUTH_CLIENT_SECRET = defineSecret("OAUTH_GIT_CLIENT_SECRET");
+const OAUTH_CLIENT_SECRET = defineSecret("OAUTH_CLIENT_SECRET");
 
 const OAUTH_REDIRECT_URI = defineString("OAUTH_REDIRECT_URI", {
   description: "The OAuth redirect base URI.",
