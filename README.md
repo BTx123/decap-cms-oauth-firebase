@@ -1,6 +1,6 @@
-# netlify-cms-oauth-firebase
+# decap-cms-oauth-firebase
 
-This is a [Firebase V2 Cloud Function](https://firebase.google.com/docs/functions/) that allows [Netlify CMS](https://www.netlifycms.org/) to authenticate with GitHub or GitLab via OAuth2.
+This is a [Firebase V2 Cloud Function](https://firebase.google.com/docs/functions/) that allows [Decap CMS](https://decapcms.org/) to authenticate with GitHub or GitLab via OAuth2.
 
 ## Setup
 
@@ -15,8 +15,8 @@ These instructions assume that you have already created a [Firebase](https://fir
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/BTx23/netlify-cms-oauth-firebase
-cd netlify-cms-oauth-firebase/functions
+git clone https://github.com/BTx23/decap-cms-oauth-firebase
+cd decap-cms-oauth-firebase/functions
 npm i
 ```
 
@@ -63,8 +63,8 @@ For GitLab you will need to set `OAUTH_PROVIDER` to `gitlab`.
 
 You should update the **authorization callback URL** in your GitHub or GitLab OAuth app's settings to point to the URL of your Firebase function, which should be of the form: `https://oauth-XXXXXXXXXX-XX.X.run.app/callback`. If you get an invalid redirect URI error when authenticating with GitLab, make sure your redirect URI is present in the list of Callback URLs in the GitLab OAuth application.
 
-### 5. Configure Netlify CMS
-Finally, update your Netlify CMS `config.yml` to point to the function:
+### 5. Configure Decap CMS
+Finally, update your Decap CMS `config.yml` to point to the function:
 ```yaml
 backend:
   name: github # Or gitlab
